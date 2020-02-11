@@ -1,0 +1,115 @@
+version: '3.7'
+services:
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - '/home/ubuntu/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml'
+      - 'prometheus:/prometheus'
+    user: root
+    ports:
+      - "9090:9090"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == swarm1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - prometheus
+
+  node-exporter:
+    image: prom/node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.ignored-mount-points="^(/rootfs|/host|)/(sys|proc|dev|host|etc)($$|/)"'
+      - '--collector.filesystem.ignored-fs-types="^(sys|proc|auto|cgroup|devpts|ns|au|fuse\.lxc|mqueue)(fs|)$$"'
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure      
+    networks:
+      - prometheus
+
+  cadvisor:
+    image: google/cadvisor:latest
+    ports:
+      - "8080:8080"
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+    networks:
+      - prometheus
+
+  grafana:
+    image: grafana/grafana
+    user: root
+    volumes: 
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == swarm1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - prometheus
+
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter
+    user: root
+    ports:
+      - "9115:9115"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == swarm1
+    volumes:
+      - '/home/ubuntu/prometheus/black/config.yml:/etc/blackbox_exporter/config.yml'
+    networks:
+      - prometheus
+
+  alertmanager:
+    image: prom/alertmanager
+    user: root
+    ports:
+      - 9093:9093
+    command:
+      - '-config.file=/etc/alertmanager/config.yml'
+      - '-storage.path=/alertmanager'
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == swarm1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - '/home/ubuntu/prometheus/alert/config.yml:/etc/alertmanager/config.yml'
+    networks:
+      - prometheus
+     
+volumes:
+  grafana-data:
+  prometheus:
+
+networks:
+  prometheus:
+    driver: overlay
+
